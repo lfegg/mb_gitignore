@@ -1,0 +1,8 @@
+{
+  "test-import": [
+    {
+      "path": "lfegg/mb_gitignore/src/lib",
+      "alias": "gitignore"
+    }
+  ]
+}

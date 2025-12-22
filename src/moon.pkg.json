@@ -1,0 +1,17 @@
+{
+  "is-main": true,
+  "import": [
+    {
+      "path": "lfegg/mb_gitignore/src/lib",
+      "alias": "gitignore"
+    },
+    {
+      "path": "moonbitlang/x/fs",
+      "alias": "fs"
+    },
+    {
+      "path": "moonbitlang/x/sys",
+      "alias": "sys"
+    }
+  ]
+}
