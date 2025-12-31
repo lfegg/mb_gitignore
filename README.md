@@ -1,6 +1,18 @@
 # mb_gitignore
 
-一个用 MoonBit 实现的 `.gitignore` 解析与匹配库，并带了一个简单的命令行示例用于判断某个路径是否会被忽略。
+MoonBit 的 `.gitignore` 规则解析与路径匹配库（matcher/engine）。
+
+## 适用场景
+
+- 构建工具/打包器：扫描文件树时跳过被忽略的文件
+- 格式化/静态分析工具：遵循仓库的 `.gitignore` 过滤输入
+- 任意需要“gitignore 风格 glob 匹配”的 MoonBit 程序
+
+## 范围与非目标
+
+- 本库支持多层 `.gitignore` 的合并（通过 `GitIgnoreChain`；CLI 默认会按目录层级加载）
+- CLI 默认会读取 `.git/info/exclude`
+- CLI 只是最小示例，不等价于 `git check-ignore`
 
 ## 功能
 
@@ -38,52 +50,43 @@ assert_eq(gi.is_ignored("important.log"), false)
 inspect(gi.why("a.log"), content="Some(\"*.log\")")
 ```
 
-API 说明：
-
-- `GitIgnore::parse(content, base? : String = "") -> GitIgnore`
-- `gi.is_ignored(path, is_dir? : Bool = false) -> Bool`
-- `gi.why(path, is_dir? : Bool = false) -> String?`：返回最后一条命中的规则原文
-
 ## 命令行示例（判断某路径是否被忽略）
 
-入口在 `src/main.mbt`，默认读取仓库根目录的 `.gitignore`。
+入口在 `src/main.mbt`。
+
+- 默认行为：读取仓库根目录 `.gitignore`，并沿目标路径逐级读取每层目录下的 `.gitignore`，合并后判断
+- 若传 `--gitignore <FILE>`：只读取该文件（保留旧行为）
+
+参数说明：
+
+- `--exclude <FILE>`：额外 excludes 文件（可重复），会参与合并
+- `--no-info-exclude`：禁用 `.git/info/exclude` 的默认加载
+- `--info-exclude <FILE>`：使用指定路径作为 info exclude 文件
+
+加载优先级（后命中覆盖前命中）：
+
+1. `--exclude` 指定的文件（按出现顺序）
+2. `.git/info/exclude`
+3. 仓库根目录 `.gitignore`
+4. 目标路径沿途每层目录下的 `.gitignore`
+
+注意：当使用 `--gitignore <FILE>` 时，会进入“单文件模式”，此时不会再自动加载上述其它来源。
 
 运行：
 
 ```bash
-moon run src -- <PATH> [--dir|--file] [--gitignore <FILE>]
+moon run src -- <PATH> [--dir|--file] [--gitignore <FILE>] [--exclude <FILE> ...] [--no-info-exclude|--info-exclude <FILE>]
 ```
 
 示例：
 
 ```bash
-moon run src -- target
-moon run src -- src/main.mbt
-moon run src -- --gitignore .gitignore target/wasm-gc
+moon run .\src\main.mbt .\.mooncakes\
 ```
 
 输出格式：
 
 - `(path, ignored, reason)`
 
-退出码：
+> 如果不传 `--dir/--file`，程序会尝试用 `@fs.is_dir(PATH)` 推断；当路径不存在时可能推断不准，建议显式指定。
 
-- `0`：ignored 为 `true`
-- `1`：ignored 为 `false`
-- `2`：参数/读取 `.gitignore` 失败
-
-说明：
-
-- 如果不传 `--dir/--file`，程序会尝试用 `@fs.is_dir(PATH)` 推断；当路径不存在时可能推断不准，建议显式指定。
-
-## 开发
-
-```bash
-moon fmt
-moon test
-moon info
-```
-
-## 已知限制
-
-- 只解析单个 `.gitignore` 内容；未实现 Git 那套“多层目录 `.gitignore` + `.git/info/exclude` + global excludes”的合并逻辑

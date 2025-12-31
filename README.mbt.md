@@ -1,6 +1,24 @@
 # mb_gitignore
 
-一个用 MoonBit 实现的 `.gitignore` 解析与匹配库，并带了一个简单的命令行示例用于判断某个路径是否会被忽略。
+一个用 MoonBit 实现的 `.gitignore` 解析与匹配库（matcher/engine），并带了一个最小命令行示例用于判断某个路径是否会被忽略。
+
+## 定位
+
+- 这是一个“规则文本 + 路径 -> 是否忽略”的库：用于在 MoonBit 程序中复用 `.gitignore` 的过滤逻辑
+- 项目内置的 CLI 仅用于演示/调试，不追求完整复刻 `git check-ignore` 的所有行为
+
+## 适用场景
+
+- 构建/打包工具：遍历文件树时按 `.gitignore` 过滤
+- 格式化/静态检查工具：让工具输入与仓库忽略规则一致
+- 任何需要 gitignore 风格通配匹配（`* ? **`、字符类等）的 MoonBit 程序
+
+## 范围与非目标
+
+- 本库支持多层 `.gitignore` 的合并：你可以用 `GitIgnoreChain` 组合多个 `GitIgnore`
+- CLI 默认会读取仓库根目录 `.gitignore`，并沿目标路径逐级读取每层目录下的 `.gitignore`
+- CLI 默认会读取 `.git/info/exclude`
+- 未实现“自动读取 git 配置”的 global excludes（例如 `core.excludesFile`）等
 
 ## 功能
 
@@ -44,14 +62,40 @@ API 说明：
 - `gi.is_ignored(path, is_dir? : Bool = false) -> Bool`
 - `gi.why(path, is_dir? : Bool = false) -> String?`：返回最后一条命中的规则原文
 
+多层合并：
+
+- `GitIgnoreChain::new() -> GitIgnoreChain`
+- `chain.push(gi : GitIgnore) -> Unit`
+- `chain.parse_and_push(content, base? : String = "") -> Unit`
+- `chain.is_ignored(path, is_dir? : Bool = false) -> Bool`
+- `chain.why(path, is_dir? : Bool = false) -> String?`
+
 ## 命令行示例（判断某路径是否被忽略）
 
-入口在 `src/main.mbt`，默认读取仓库根目录的 `.gitignore`。
+入口在 `src/main.mbt`（用于示例/调试）。
+
+- 默认行为：读取仓库根目录 `.gitignore`，并沿目标路径逐级读取每层目录下的 `.gitignore`
+- 若传 `--gitignore <FILE>`：只读取该文件
+
+参数说明：
+
+- `--exclude <FILE>`：额外 excludes 文件（可重复），会参与合并
+- `--no-info-exclude`：禁用 `.git/info/exclude` 的默认加载
+- `--info-exclude <FILE>`：使用指定路径作为 info exclude 文件
+
+加载优先级（后命中覆盖前命中，符合 gitignore “最后匹配生效” 的规则）：
+
+1. `--exclude` 指定的文件（按出现顺序）
+2. `.git/info/exclude`（可用 `--no-info-exclude` 禁用）
+3. 仓库根目录 `.gitignore`
+4. 目标路径沿途每层目录下的 `.gitignore`
+
+注意：当使用 `--gitignore <FILE>` 时，会进入“单文件模式”，此时不会再自动加载上述其它来源。
 
 运行：
 
 ```bash
-moon run src -- <PATH> [--dir|--file] [--gitignore <FILE>]
+moon run src -- <PATH> [--dir|--file] [--gitignore <FILE>] [--exclude <FILE> ...] [--no-info-exclude|--info-exclude <FILE>]
 ```
 
 输出格式：
@@ -63,16 +107,3 @@ moon run src -- <PATH> [--dir|--file] [--gitignore <FILE>]
 - `0`：ignored 为 `true`
 - `1`：ignored 为 `false`
 - `2`：参数/读取 `.gitignore` 失败
-
-## 开发
-
-```bash
-moon fmt
-moon test
-moon info
-```
-
-## 已知限制（目前实现）
-
-- 只解析单个 `.gitignore` 内容；未实现 Git 那套“多层目录 `.gitignore` + `.git/info/exclude` + global excludes”的合并逻辑
-- 通配与边界行为以测试覆盖为准；如你需要更严格对齐 Git 行为，可以提供用例继续补齐

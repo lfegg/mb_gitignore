@@ -122,3 +122,69 @@ test "char-class-leading-close-bracket" {
   inspect(gi.is_ignored("].txt"), content="true")
   inspect(gi.is_ignored("a.txt"), content="false")
 }
+
+///|
+test "chain-layer-overrides" {
+  let root =
+    #|*.log
+    #|
+  let sub =
+    #|!keep.log
+    #|
+  let chain = @gitignore.GitIgnoreChain::new()
+  chain.parse_and_push(root)
+  chain.parse_and_push(sub, base="a")
+  inspect(chain.is_ignored("x.log"), content="true")
+  inspect(chain.is_ignored("a/x.log"), content="true")
+  inspect(chain.is_ignored("a/keep.log"), content="false")
+  inspect(chain.why("a/keep.log").unwrap(), content="!keep.log")
+}
+
+///|
+test "chain-anchored-is-per-base" {
+  let root =
+    #|/foo
+    #|
+  let sub =
+    #|/foo
+    #|
+  let chain = @gitignore.GitIgnoreChain::new()
+  chain.parse_and_push(root)
+  chain.parse_and_push(sub, base="a")
+  inspect(chain.is_ignored("foo"), content="true")
+  inspect(chain.is_ignored("a/foo"), content="true")
+  inspect(chain.is_ignored("x/foo"), content="false")
+  inspect(chain.is_ignored("a/b/foo"), content="false")
+}
+
+///|
+test "chain-unignore-requires-parent-dir-across-layers" {
+  let root =
+    #|foo/
+    #|
+  let sub =
+    #|!bar.txt
+    #|
+  let chain = @gitignore.GitIgnoreChain::new()
+  chain.parse_and_push(root)
+  chain.parse_and_push(sub, base="foo")
+  // Parent dir foo is ignored by root, so child cannot be unignored by deeper rules.
+  inspect(chain.is_ignored("foo/bar.txt"), content="true")
+  inspect(chain.why("foo/bar.txt").unwrap(), content="foo/")
+}
+
+///|
+test "chain-unignore-parent-then-file" {
+  let root =
+    #|foo/
+    #|!foo/
+    #|
+  let sub =
+    #|!bar.txt
+    #|
+  let chain = @gitignore.GitIgnoreChain::new()
+  chain.parse_and_push(root)
+  chain.parse_and_push(sub, base="foo")
+  inspect(chain.is_ignored("foo/bar.txt"), content="false")
+  inspect(chain.why("foo/bar.txt").unwrap(), content="!bar.txt")
+}

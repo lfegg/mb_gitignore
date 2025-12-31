@@ -30,6 +30,11 @@ pub struct GitIgnore {
 }
 
 ///|
+pub struct GitIgnoreChain {
+  ignores : Array[GitIgnore]
+}
+
+///|
 fn to_chars(s : String) -> Array[Char] {
   s.iter().collect()
 }
@@ -75,6 +80,25 @@ fn normalize_path(path : String) -> String {
     out.push(buf[i])
   }
   from_chars(out)
+}
+
+///|
+pub fn GitIgnoreChain::new() -> GitIgnoreChain {
+  { ignores: [] }
+}
+
+///|
+pub fn GitIgnoreChain::push(self : GitIgnoreChain, gi : GitIgnore) -> Unit {
+  self.ignores.push(gi)
+}
+
+///|
+pub fn GitIgnoreChain::parse_and_push(
+  self : GitIgnoreChain,
+  content : String,
+  base? : String = "",
+) -> Unit {
+  self.push(GitIgnore::parse(content, base~))
 }
 
 ///|
@@ -372,6 +396,114 @@ pub fn GitIgnore::parse(content : String, base? : String = "") -> GitIgnore {
     }
   }
   gi
+}
+
+///|
+fn GitIgnore::match_no_parent(
+  self : GitIgnore,
+  path : String,
+  is_dir : Bool,
+) -> (Bool?, String?) {
+  let rel = self.rel_path(path)
+  if rel is None {
+    return (None, None)
+  }
+  let rel = rel.unwrap()
+  let mut ignored = false
+  let mut last : String? = None
+  for rule in self.rules.iter() {
+    if rule.matches(rel, is_dir) {
+      ignored = !rule.negated
+      last = Some(rule.raw)
+    }
+  }
+  if last is None {
+    (None, None)
+  } else {
+    (Some(ignored), last)
+  }
+}
+
+///|
+fn GitIgnoreChain::eval_no_parent(
+  self : GitIgnoreChain,
+  path : String,
+  is_dir : Bool,
+) -> (Bool, String?) {
+  let mut ignored = false
+  let mut reason : String? = None
+  for gi in self.ignores.iter() {
+    let (hit, why) = gi.match_no_parent(path, is_dir)
+    if why is Some(r) {
+      ignored = hit.unwrap()
+      reason = Some(r)
+    }
+  }
+  (ignored, reason)
+}
+
+///|
+pub fn GitIgnoreChain::is_ignored(
+  self : GitIgnoreChain,
+  path : String,
+  is_dir? : Bool = false,
+) -> Bool {
+  let path = normalize_path(path)
+  if path == "" {
+    return self.eval_no_parent(path, is_dir).0
+  }
+  let parts : Array[String] = path
+    .split("/")
+    .map(StringView::to_string)
+    .collect()
+  let limit = if is_dir { parts.length() } else { parts.length() - 1 }
+  if limit > 0 {
+    let mut prefix = parts[0]
+    let (dir_ignored, _) = self.eval_no_parent(prefix, true)
+    if dir_ignored {
+      return true
+    }
+    for i in 1..<limit {
+      prefix = prefix + "/" + parts[i]
+      let (dir_ignored, _) = self.eval_no_parent(prefix, true)
+      if dir_ignored {
+        return true
+      }
+    }
+  }
+  self.eval_no_parent(path, is_dir).0
+}
+
+///|
+pub fn GitIgnoreChain::why(
+  self : GitIgnoreChain,
+  path : String,
+  is_dir? : Bool = false,
+) -> String? {
+  let path = normalize_path(path)
+  if path == "" {
+    return self.eval_no_parent(path, is_dir).1
+  }
+  let parts : Array[String] = path
+    .split("/")
+    .map(StringView::to_string)
+    .collect()
+  let limit = if is_dir { parts.length() } else { parts.length() - 1 }
+  if limit > 0 {
+    let mut prefix = parts[0]
+    let (dir_ignored, why) = self.eval_no_parent(prefix, true)
+    if dir_ignored {
+      return why
+    }
+    for i in 1..<limit {
+      prefix = prefix + "/" + parts[i]
+      let (dir_ignored, why) = self.eval_no_parent(prefix, true)
+      if dir_ignored {
+        return why
+      }
+    }
+  }
+  self.eval_no_parent(path, is_dir).1
 }
 
 ///|

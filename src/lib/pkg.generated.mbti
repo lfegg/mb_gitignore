@@ -1,0 +1,32 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "lfegg/mb_gitignore/src/lib"
+
+// Values
+
+// Errors
+
+// Types and methods
+pub struct GitIgnore {
+  base : String
+  rules : Array[Rule]
+}
+pub fn GitIgnore::is_ignored(Self, String, is_dir? : Bool) -> Bool
+pub fn GitIgnore::new(base? : String) -> Self
+pub fn GitIgnore::parse(String, base? : String) -> Self
+pub fn GitIgnore::why(Self, String, is_dir? : Bool) -> String?
+
+pub struct GitIgnoreChain {
+  ignores : Array[GitIgnore]
+}
+pub fn GitIgnoreChain::is_ignored(Self, String, is_dir? : Bool) -> Bool
+pub fn GitIgnoreChain::new() -> Self
+pub fn GitIgnoreChain::parse_and_push(Self, String, base? : String) -> Unit
+pub fn GitIgnoreChain::push(Self, GitIgnore) -> Unit
+pub fn GitIgnoreChain::why(Self, String, is_dir? : Bool) -> String?
+
+type Rule
+
+// Type aliases
+
+// Traits
+
